@@ -1,27 +1,27 @@
 <!DOCTYPE html>
-<html lang="ja">
-  <head>
+<html lang="en-us">
+<head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity WebGL Player | testJayro</title>
+    <title>Unity WebGL Player | u6_create</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
-  </head>
-  <body>
+</head>
+<body>
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=600 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
+        <canvas id="unity-canvas" width=900 height=1600 tabindex="-1"></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-logo"></div>
+            <div id="unity-progress-bar-empty">
+                <div id="unity-progress-bar-full"></div>
+            </div>
         </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-webgl-logo"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">testJayro</div>
-      </div>
+        <div id="unity-warning"> </div>
+        <div id="unity-footer">
+            <div id="unity-webgl-logo"></div>
+            <div id="unity-fullscreen-button"></div>
+            <div id="unity-build-title">u6_create</div>
+        </div>
     </div>
     <script>
 
@@ -59,13 +59,13 @@
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/Build.loader.js";
       var config = {
-        dataUrl: buildUrl + "/Build.data",
-        frameworkUrl: buildUrl + "/Build.framework.js",
-        codeUrl: buildUrl + "/Build.wasm",
+        dataUrl: buildUrl + "/Build.data.gz",
+        frameworkUrl: buildUrl + "/Build.framework.js.gz",
+        codeUrl: buildUrl + "/Build.wasm.gz",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "DefaultCompany",
-        productName: "testJayro",
-        productVersion: "0.1",
+        productName: "u6_create",
+        productVersion: "0.1.0",
         showBanner: unityShowBanner,
       };
 
@@ -75,15 +75,6 @@
       // happening inside the engine, and you would instead like to size up
       // the canvas DOM size and WebGL render target sizes yourself.
       // config.matchWebGLToCanvasSize = false;
-
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
 
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         // Mobile device style: fill the whole browser client area with the game canvas:
@@ -103,29 +94,143 @@
       } else {
         // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
 
-        canvas.style.width = "600px";
-        canvas.style.height = "600px";
+        canvas.style.width = "900px";
+        canvas.style.height = "1600px";
       }
 
       loadingBar.style.display = "block";
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          progressBarFull.style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
+        var lastProgressReport = 0; // 前回の進行度報告値
+
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+            createUnityInstance(canvas, config, (progress) => {
+                // ロード進行状況をリアルタイムで更新
+                progressBarFull.style.width = 100 * progress + "%";
+
+                // 進行度が前回から10%以上進んだ場合にのみ更新を報告
+                if (progress >= lastProgressReport + 0.1) {
+                    lastProgressReport = progress; // 前回の進行度を更新
+                    updateProgress(100 * progress);
+                }
+            }).then((unityInstance) => {
+                window.unityInstance = unityInstance; // グローバル変数として設定
                 loadingBar.style.display = "none";
                 fullscreenButton.onclick = () => {
-                  unityInstance.SetFullscreen(1);
+                    unityInstance.SetFullscreen(1);
                 };
-              }).catch((message) => {
-                alert(message);
-              });
-            };
 
-      document.body.appendChild(script);
+                // ゲームのロード完了後にgameLoadedを呼び出す
+                gameLoaded();
+            }).catch((message) => {
+            }).catch((message) => {
+                alert("An error occurred: " + message);
+            });
+        };
+        document.body.appendChild(script);
 
+        function updateProgress(progress) {
+            let progressRounded = Math.floor(progress * 100) / 100;
+            console.log("Current progress: " + progressRounded + "%");
+            sendUnityProgress(progressRounded);
+        }
+        function gameLoaded() {
+            console.log("Unity WebGL game is fully loaded and ready.");
+            notifyGameLoaded();
+            MountingConfirmation();
+        }
+
+        // UnityのPauseGameメソッドを呼び出してゲームを停止
+        function pauseUnityGame() {
+            if (window.unityInstance) {
+                unityInstance.SendMessage('MinutesClient', 'PauseGame');
+            }
+        }
+
+        // UnityのResumeGameメソッドを呼び出してゲームを再開
+        function resumeUnityGame() {
+            if (window.unityInstance) {
+                unityInstance.Module.resumeMainLoop();
+                unityInstance.SendMessage('MinutesClient', 'ResumeGame');
+            }
+        }
+
+
+        function isMobileWebView() {
+            const ua = window.navigator.userAgent || "";
+            const isAndroid = /Android/i.test(ua);
+            const isIOS = /iPhone|iPad|iPod/i.test(ua);
+            return (
+                (isIOS && !/Safari/i.test(ua)) ||
+                (isAndroid && (/wv/.test(ua) || /; wv/.test(ua) || /Crosswalk/.test(ua)))
+            );
+        }
+
+        function sendUnityWebViewMessage(key, value = "") {
+            if (isMobileWebView()) {
+                const message = value ? `unity:${key}:${value}` : `unity:${key}`;
+                window.location.href = message;
+            }
+        }
+
+        function sendUnityProgress(progress) {
+            sendUnityWebViewMessage("progress", progress);
+        }
+
+        function notifyGameLoaded() {
+            sendUnityWebViewMessage("gameLoaded");
+        }
+
+        function notifyAlreadyMounted() {
+            sendUnityWebViewMessage("AlreadyMounted");
+        }
+
+        function notifyPluginVersion(version) {
+            sendUnityWebViewMessage("Plugin Version", version);
+        }
+
+        function AlreadyMounted() {
+            notifyAlreadyMounted();
+        }
+
+        function checkPluginVersion() {
+            if (typeof window.pluginVersion !== 'undefined') {
+                console.log("Plugin Version: " + window.pluginVersion);
+                notifyPluginVersion(window.pluginVersion);
+            }
+        }
+
+        function MountingConfirmation() {
+            if (window.unityInstance) {
+                unityInstance.SendMessage('MinutesClient', 'MountingConfirmation');
+            }
+        }
+
+        function UnityInitialized() {
+            console.log("Unity WebGL player initialized.");
+            if (typeof unityInstance !== "undefined") {
+                unityInstance.SendMessage('MinutesClient', 'MountingConfirmation');
+            }
+        }
+
+        function OnSoundPauseComplete() {
+            if (window.unityInstance) {
+                setTimeout(function () {
+                    unityInstance.Module.pauseMainLoop();
+                    console.log('Main loop paused after sound stopped');
+                }, 0);
+            }
+        }
+
+        function OnSoundResumeComplete() {
+            if (window.unityInstance) {
+                setTimeout(function () {
+                    // unityInstance.Module.resumeMainLoop();
+                    console.log('Main loop resumed after sound started');
+                }, 0);
+            }
+        }
     </script>
-  </body>
+</body>
 </html>
